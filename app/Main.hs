@@ -13,6 +13,7 @@ import Data.Time
   ( Day
   , addDays
   , defaultTimeLocale
+  , diffDays
   , formatTime
   , getZonedTime
   , localDay
@@ -90,6 +91,18 @@ dayMarks n today s =
 fmtDay :: Day -> String
 fmtDay d = formatTime defaultTimeLocale "%Y-%m-%d" d
 
+-- | Most recent checked day, if any.
+lastCheckedDay :: Habit -> Maybe Day
+lastCheckedDay h =
+  case checks h of
+    [] -> Nothing
+    ds -> Just (maximum ds)
+
+-- | Days since the last check (0 if today), when available.
+daysSinceLastCheck :: Day -> Habit -> Maybe Integer
+daysSinceLastCheck today h =
+  diffDays today <$> lastCheckedDay h
+
 -- Rendering
 
 -- | Draw the full screen view.
@@ -110,6 +123,7 @@ render today selected hf = do
       putStrLn ("Selected: " <> name h)
       putStrLn ("Last 14 days: " <> dayMarks 14 today s)
       putStrLn ("Streak: " <> show (streakFrom today s))
+      renderMissedNotice today h
 
 -- | Render a single habit row for the list view.
 renderRow :: Day -> Int -> (Int, Habit) -> String
@@ -118,6 +132,19 @@ renderRow today selected (i, h) =
       doneToday = if Set.member today (toSet h) then "[x]" else "[ ]"
       st = streakFrom today (toSet h)
   in cursor <> " " <> doneToday <> " " <> name h <> "  (streak " <> show st <> ")"
+
+renderMissedNotice :: Day -> Habit -> IO ()
+renderMissedNotice today h =
+  case daysSinceLastCheck today h of
+    Just delta
+      | delta >= 2 -> do
+          let missedDays = delta - 1
+              dayLabel = if missedDays == 1 then "day" else "days"
+          putStrLn ""
+          putStrLn ("Missed " <> show missedDays <> " " <> dayLabel <> " since your last check-in.")
+          putStrLn "It's okay to miss one day as long as you pick up where you left off."
+          putStrLn "Don't let one day turn into many. Consistency, consistency, consistency."
+    _ -> pure ()
 
 -- Main loop
 
